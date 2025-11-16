@@ -22,7 +22,8 @@ const orderSchema = new mongoose.Schema({
   orderNumber: {
     type: String,
     unique: true,
-    required: true
+    // REMOVED: required: true - because it's auto-generated
+    // This is the key fix!
   },
   customer: {
     name: {
@@ -65,7 +66,7 @@ const orderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate order number before saving - FIXED VERSION
+// Generate order number before saving - IMPROVED VERSION
 orderSchema.pre('save', async function(next) {
   if (this.isNew && !this.orderNumber) {
     try {
@@ -90,6 +91,16 @@ orderSchema.pre('save', async function(next) {
       const timestamp = Date.now();
       this.orderNumber = `ORD-${timestamp}`;
     }
+  }
+  next();
+});
+
+// Add a pre-validate hook to ensure orderNumber exists before validation
+orderSchema.pre('validate', function(next) {
+  if (this.isNew && !this.orderNumber) {
+    // Set a temporary orderNumber for validation
+    // The real one will be set in pre('save')
+    this.orderNumber = 'TEMP-ORDER-NUMBER';
   }
   next();
 });
