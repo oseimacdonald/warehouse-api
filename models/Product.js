@@ -14,7 +14,7 @@ const productSchema = new mongoose.Schema({
   },
   sku: {
     type: String,
-    required: [true, 'SKU is required'],
+    // REMOVED: required: true - because it will be auto-generated
     unique: true,
     uppercase: true,
     match: [/^[A-Z0-9-]+$/, 'SKU can only contain letters, numbers, and hyphens']
@@ -62,6 +62,48 @@ const productSchema = new mongoose.Schema({
   images: [String]
 }, {
   timestamps: true
+});
+
+// Auto-generate SKU before saving
+productSchema.pre('save', async function(next) {
+  if (this.isNew && !this.sku) {
+    try {
+      // Generate SKU based on category and sequence
+      const categoryPrefix = this.category.substring(0, 3).toUpperCase();
+      
+      // Find the latest product in the same category
+      const latestProduct = await this.constructor.findOne(
+        { category: this.category },
+        {},
+        { sort: { createdAt: -1 } }
+      );
+      
+      let sequence = 1;
+      if (latestProduct && latestProduct.sku) {
+        const match = latestProduct.sku.match(new RegExp(`${categoryPrefix}-(\\d+)`));
+        if (match) {
+          sequence = parseInt(match[1]) + 1;
+        }
+      }
+      
+      this.sku = `${categoryPrefix}-${sequence.toString().padStart(3, '0')}`;
+    } catch (error) {
+      // Fallback: use timestamp if sequence fails
+      const timestamp = Date.now().toString().slice(-6);
+      this.sku = `${this.category.substring(0, 3).toUpperCase()}-${timestamp}`;
+    }
+  }
+  next();
+});
+
+// Add pre-validate hook to ensure SKU exists before validation
+productSchema.pre('validate', function(next) {
+  if (this.isNew && !this.sku) {
+    // Set a temporary SKU for validation
+    // The real one will be set in pre('save')
+    this.sku = 'TEMP-SKU';
+  }
+  next();
 });
 
 // Remove duplicate index definitions - keep only schema indexes
