@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+// Global counters for temporary order numbers
+let tempCounter = 0;
+let lastTimestamp = 0;
+
 const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
@@ -23,7 +27,6 @@ const orderSchema = new mongoose.Schema({
     type: String,
     unique: true,
     // REMOVED: required: true - because it's auto-generated
-    // This is the key fix!
   },
   customer: {
     name: {
@@ -66,13 +69,13 @@ const orderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate order number before saving - IMPROVED VERSION
+// Generate order number before saving 
 orderSchema.pre('save', async function(next) {
-  if (this.isNew && !this.orderNumber) {
+  if (this.isNew && this.orderNumber.startsWith('TEMP-')) {
     try {
-      // Find the latest order to get a sequence number
+      // Find the latest REAL order (not TEMP ones)
       const latestOrder = await this.constructor.findOne(
-        {}, 
+        { orderNumber: { $not: /^TEMP-/ } },
         {}, 
         { sort: { createdAt: -1 } }
       );
@@ -95,12 +98,22 @@ orderSchema.pre('save', async function(next) {
   next();
 });
 
-// Add a pre-validate hook to ensure orderNumber exists before validation
+// Use sequential temporary order numbers per millisecond
 orderSchema.pre('validate', function(next) {
   if (this.isNew && !this.orderNumber) {
-    // Set a temporary orderNumber for validation
-    // The real one will be set in pre('save')
-    this.orderNumber = 'TEMP-ORDER-NUMBER';
+    const now = Date.now();
+    
+    // Reset counter if we're in a new millisecond
+    if (now !== lastTimestamp) {
+      lastTimestamp = now;
+      tempCounter = 0;
+    }
+    
+    // Increment counter for this millisecond
+    tempCounter++;
+    
+    // Create unique temporary order number
+    this.orderNumber = `TEMP-${now}-${tempCounter}`;
   }
   next();
 });
