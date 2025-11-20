@@ -19,11 +19,11 @@ const options = {
     },
     servers: [
       {
-        url: 'https://warehouse-api-bq02.onrender.com/api',
+        url: 'https://warehouse-api-bq02.onrender.com/',
         description: 'Production server',
       },
       {
-        url: 'http://localhost:3000/api',
+        url: 'http://localhost:3000/',
         description: 'Development server',
       },
     ],
