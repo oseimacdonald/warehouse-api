@@ -17,7 +17,7 @@ const {
 
 /**
  * @swagger
- * /api/products:
+ * /products:  // CHANGED: removed /api/
  *   get:
  *     summary: Get all products with filtering and pagination
  *     tags: [Products]
@@ -85,7 +85,7 @@ router.get('/', getAllProducts);
 
 /**
  * @swagger
- * /api/products/{id}:
+ * /products/{id}:  // CHANGED: removed /api/
  *   get:
  *     summary: Get a product by ID
  *     tags: [Products]
@@ -118,7 +118,7 @@ router.get('/:id', getProductById);
 
 /**
  * @swagger
- * /api/products:
+ * /products:  // CHANGED: removed /api/
  *   post:
  *     summary: Create a new product
  *     tags: [Products]
@@ -181,7 +181,7 @@ router.post('/', createProduct);
 
 /**
  * @swagger
- * /api/products/{id}:
+ * /products/{id}:  // CHANGED: removed /api/
  *   put:
  *     summary: Update a product
  *     tags: [Products]
@@ -241,7 +241,7 @@ router.put('/:id', updateProduct);
 
 /**
  * @swagger
- * /api/products/{id}:
+ * /products/{id}:  // CHANGED: removed /api/
  *   delete:
  *     summary: Delete a product
  *     tags: [Products]

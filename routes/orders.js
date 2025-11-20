@@ -17,7 +17,7 @@ const {
 
 /**
  * @swagger
- * /api/orders:
+ * /orders:  // CHANGED: removed /api/
  *   get:
  *     summary: Get all orders with filtering and pagination
  *     tags: [Orders]
@@ -68,7 +68,7 @@ router.get('/', getAllOrders);
 
 /**
  * @swagger
- * /api/orders/{id}:
+ * /orders/{id}:  // CHANGED: removed /api/
  *   get:
  *     summary: Get a specific order by ID
  *     tags: [Orders]
@@ -101,7 +101,7 @@ router.get('/:id', getOrderById);
 
 /**
  * @swagger
- * /api/orders:
+ * /orders:  // CHANGED: removed /api/
  *   post:
  *     summary: Create a new order
  *     tags: [Orders]
@@ -188,7 +188,7 @@ router.post('/', createOrder);
 
 /**
  * @swagger
- * /api/orders/{id}:
+ * /orders/{id}:  // CHANGED: removed /api/
  *   put:
  *     summary: Update order status
  *     tags: [Orders]
@@ -239,7 +239,7 @@ router.put('/:id', updateOrderStatus);
 
 /**
  * @swagger
- * /api/orders/{id}:
+ * /orders/{id}:  // CHANGED: removed /api/
  *   delete:
  *     summary: Delete an order
  *     tags: [Orders]

@@ -19,11 +19,11 @@ const options = {
     },
     servers: [
       {
-        url: 'https://warehouse-api-bq02.onrender.com/api',
+        url: 'https://warehouse-api-bq02.onrender.com', // Remove /api from here
         description: 'Production server',
       },
       {
-        url: 'http://localhost:3000/api',
+        url: 'http://localhost:3000', // Remove /api from here
         description: 'Development server',
       },
     ],
@@ -270,31 +270,15 @@ const options = {
       }
     }
   },
-  apis: ['./routes/*.js'], // Path to the API docs
+  apis: ['./routes/*.js'],
 };
 
 const specs = swaggerJsdoc(options);
 
-// Add a JSON endpoint for Swagger spec
 module.exports = (app) => {
-  // Serve Swagger JSON
-  app.get('/api-docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(specs);
-  });
-
-  // Serve Swagger UI
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: "Warehouse API Documentation",
-    swaggerOptions: {
-      urls: [
-        {
-          url: '/api-docs.json',
-          name: 'Warehouse API v1'
-        }
-      ]
-    }
+    customSiteTitle: "Warehouse API Documentation"
   }));
 };
