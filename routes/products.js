@@ -17,7 +17,7 @@ const {
 
 /**
  * @swagger
- * /products:  // CHANGED: removed /api/
+ * /api/products:
  *   get:
  *     summary: Get all products with filtering and pagination
  *     tags: [Products]
@@ -41,8 +41,13 @@ const {
  *         name: category
  *         schema:
  *           type: string
- *           enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+ *           enum: [Electronics, Clothing, Home & Garden, Sports, Beauty, Toys, Other]
  *         description: Filter by category
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
  *       - in: query
  *         name: minPrice
  *         schema:
@@ -55,6 +60,11 @@ const {
  *           type: number
  *           minimum: 0
  *         description: Maximum price filter
+ *       - in: query
+ *         name: inStock
+ *         schema:
+ *           type: boolean
+ *         description: Filter products in stock
  *       - in: query
  *         name: search
  *         schema:
@@ -70,14 +80,27 @@ const {
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 count:
  *                   type: integer
- *                   example: 5
  *                 data:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Product'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalItems:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrev:
+ *                       type: boolean
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
@@ -85,7 +108,7 @@ router.get('/', getAllProducts);
 
 /**
  * @swagger
- * /products/{id}:  // CHANGED: removed /api/
+ * /api/products/{id}:
  *   get:
  *     summary: Get a product by ID
  *     tags: [Products]
@@ -95,7 +118,8 @@ router.get('/', getAllProducts);
  *         required: true
  *         schema:
  *           type: string
- *         description: Product ID
+ *           pattern: '^[0-9a-fA-F]{24}$'
+ *         description: Valid MongoDB ObjectId
  *     responses:
  *       200:
  *         description: Product retrieved successfully
@@ -106,9 +130,10 @@ router.get('/', getAllProducts);
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 data:
  *                   $ref: '#/components/schemas/Product'
+ *       400:
+ *         description: Invalid product ID
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
@@ -118,7 +143,7 @@ router.get('/:id', getProductById);
 
 /**
  * @swagger
- * /products:  // CHANGED: removed /api/
+ * /api/products:
  *   post:
  *     summary: Create a new product
  *     tags: [Products]
@@ -130,32 +155,77 @@ router.get('/:id', getProductById);
  *             type: object
  *             required:
  *               - name
- *               - price
+ *               - description
  *               - category
+ *               - price
+ *               - cost
  *               - stockQuantity
+ *               - supplier
  *             properties:
  *               name:
  *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
  *                 example: "Wireless Bluetooth Headphones"
  *               description:
  *                 type: string
- *                 example: "Premium noise-cancelling wireless headphones"
+ *                 maxLength: 1000
+ *                 example: "Premium noise-cancelling wireless headphones with 30-hour battery life"
  *               category:
  *                 type: string
- *                 enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+ *                 enum: [Electronics, Clothing, Home & Garden, Sports, Beauty, Toys, Other]
  *                 example: "Electronics"
  *               price:
  *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 100000
  *                 example: 129.99
  *               cost:
  *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 100000
  *                 example: 65.50
  *               stockQuantity:
  *                 type: integer
+ *                 minimum: 0
  *                 example: 75
  *               supplier:
  *                 type: string
  *                 example: "TechCorp Inc"
+ *               weight:
+ *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 1000
+ *                 example: 0.5
+ *               dimensions:
+ *                 type: object
+ *                 properties:
+ *                   length:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *                     example: 20
+ *                   width:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *                     example: 15
+ *                   height:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *                     example: 8
+ *               isActive:
+ *                 type: boolean
+ *                 default: true
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uri
  *     responses:
  *       201:
  *         description: Product created successfully
@@ -166,14 +236,32 @@ router.get('/:id', getProductById);
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Product created successfully"
  *                 data:
  *                   $ref: '#/components/schemas/Product'
  *       400:
- *         $ref: '#/components/responses/ValidationError'
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               missingFields:
+ *                 value:
+ *                   success: false
+ *                   message: "Missing required fields"
+ *                   errors: ["name is required", "price is required"]
+ *               invalidCategory:
+ *                 value:
+ *                   success: false
+ *                   message: "Invalid category"
+ *                   errors: ["Category must be one of: Electronics, Clothing, Home & Garden, Sports, Beauty, Toys, Other"]
+ *               negativePrice:
+ *                 value:
+ *                   success: false
+ *                   message: "Validation error"
+ *                   errors: ["price must be a positive number"]
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
@@ -181,7 +269,7 @@ router.post('/', createProduct);
 
 /**
  * @swagger
- * /products/{id}:  // CHANGED: removed /api/
+ * /api/products/{id}:
  *   put:
  *     summary: Update a product
  *     tags: [Products]
@@ -191,7 +279,8 @@ router.post('/', createProduct);
  *         required: true
  *         schema:
  *           type: string
- *         description: Product ID
+ *           pattern: '^[0-9a-fA-F]{24}$'
+ *         description: Valid MongoDB ObjectId
  *     requestBody:
  *       required: true
  *       content:
@@ -201,19 +290,51 @@ router.post('/', createProduct);
  *             properties:
  *               name:
  *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 100
  *               description:
  *                 type: string
+ *                 maxLength: 1000
  *               category:
  *                 type: string
- *                 enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+ *                 enum: [Electronics, Clothing, Home & Garden, Sports, Beauty, Toys, Other]
  *               price:
  *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 100000
  *               cost:
  *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 100000
  *               stockQuantity:
  *                 type: integer
+ *                 minimum: 0
  *               supplier:
  *                 type: string
+ *               weight:
+ *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 1000
+ *               dimensions:
+ *                 type: object
+ *                 properties:
+ *                   length:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *                   width:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *                   height:
+ *                     type: number
+ *                     format: float
+ *                     minimum: 0
+ *               isActive:
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Product updated successfully
@@ -224,14 +345,16 @@ router.post('/', createProduct);
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Product updated successfully"
  *                 data:
  *                   $ref: '#/components/schemas/Product'
  *       400:
- *         $ref: '#/components/responses/ValidationError'
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
@@ -241,7 +364,7 @@ router.put('/:id', updateProduct);
 
 /**
  * @swagger
- * /products/{id}:  // CHANGED: removed /api/
+ * /api/products/{id}:
  *   delete:
  *     summary: Delete a product
  *     tags: [Products]
@@ -251,7 +374,8 @@ router.put('/:id', updateProduct);
  *         required: true
  *         schema:
  *           type: string
- *         description: Product ID
+ *           pattern: '^[0-9a-fA-F]{24}$'
+ *         description: Valid MongoDB ObjectId
  *     responses:
  *       200:
  *         description: Product deleted successfully
@@ -262,10 +386,19 @@ router.put('/:id', updateProduct);
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Product deleted successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     sku:
+ *                       type: string
+ *       400:
+ *         description: Invalid product ID
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
