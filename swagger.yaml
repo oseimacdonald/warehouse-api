@@ -1,0 +1,872 @@
+openapi: 3.0.0
+info:
+  title: Warehouse Management API
+  description: A comprehensive API for managing warehouse products and orders
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@warehouse.com
+servers:
+  - url: https://warehouse-api-bq02.onrender.com/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Development server
+
+tags:
+  - name: Products
+    description: Product management operations
+  - name: Orders
+    description: Order management operations
+
+paths:
+  # Products endpoints
+  /products:
+    get:
+      tags:
+        - Products
+      summary: Get all products
+      description: Retrieve a list of all products with optional filtering and pagination
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: category
+          in: query
+          description: Filter by category
+          required: false
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          description: Filter by active status
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Products
+      summary: Create a new product
+      description: Create a new product in the warehouse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Get product by ID
+      description: Retrieve a specific product by its ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Products
+      summary: Update product
+      description: Update an existing product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Products
+      summary: Delete product
+      description: Delete a product from the warehouse
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Product deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Orders endpoints
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: Get all orders
+      description: Retrieve a list of all orders with optional filtering
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: status
+          in: query
+          description: Filter by order status
+          required: false
+          schema:
+            type: string
+            enum: [pending, processing, shipped, delivered, cancelled]
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Orders
+      summary: Create a new order
+      description: Create a new order with products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderInput'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Get order by ID
+      description: Retrieve a specific order by its ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Orders
+      summary: Update order
+      description: Update an existing order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+      responses:
+        '200':
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Orders
+      summary: Delete order
+      description: Delete an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Order deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    Product:
+      type: object
+      required:
+        - name
+        - price
+        - category
+        - stockQuantity
+      properties:
+        _id:
+          type: string
+          description: Unique identifier for the product
+          example: "507f1f77bcf86cd799439011"
+        name:
+          type: string
+          description: Product name
+          example: "Wireless Bluetooth Headphones"
+        description:
+          type: string
+          description: Product description
+          example: "Premium noise-cancelling wireless headphones"
+        category:
+          type: string
+          description: Product category
+          enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+          example: "Electronics"
+        price:
+          type: number
+          format: float
+          minimum: 0
+          description: Product price
+          example: 129.99
+        cost:
+          type: number
+          format: float
+          minimum: 0
+          description: Product cost
+          example: 65.50
+        stockQuantity:
+          type: integer
+          minimum: 0
+          description: Available stock quantity
+          example: 75
+        sku:
+          type: string
+          description: Stock Keeping Unit
+          example: "WBH-2024-PRO"
+        supplier:
+          type: string
+          description: Product supplier
+          example: "TechCorp Inc"
+        weight:
+          type: number
+          format: float
+          minimum: 0
+          description: Product weight in kg
+          example: 0.5
+        dimensions:
+          type: object
+          properties:
+            length:
+              type: number
+              format: float
+              minimum: 0
+            width:
+              type: number
+              format: float
+              minimum: 0
+            height:
+              type: number
+              format: float
+              minimum: 0
+        isActive:
+          type: boolean
+          description: Whether the product is active
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductInput:
+      type: object
+      required:
+        - name
+        - price
+        - category
+        - stockQuantity
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Wireless Bluetooth Headphones"
+        description:
+          type: string
+          maxLength: 1000
+          example: "Premium noise-cancelling wireless headphones with 30-hour battery life"
+        category:
+          type: string
+          enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+          example: "Electronics"
+        price:
+          type: number
+          format: float
+          minimum: 0
+          example: 129.99
+        cost:
+          type: number
+          format: float
+          minimum: 0
+          example: 65.50
+        stockQuantity:
+          type: integer
+          minimum: 0
+          example: 75
+        supplier:
+          type: string
+          example: "TechCorp Inc"
+        weight:
+          type: number
+          format: float
+          minimum: 0
+          example: 0.5
+        dimensions:
+          type: object
+          properties:
+            length:
+              type: number
+              format: float
+              minimum: 0
+              example: 20
+            width:
+              type: number
+              format: float
+              minimum: 0
+              example: 15
+            height:
+              type: number
+              format: float
+              minimum: 0
+              example: 8
+        isActive:
+          type: boolean
+          default: true
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          type: string
+          enum: [Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty]
+        price:
+          type: number
+          format: float
+          minimum: 0
+        cost:
+          type: number
+          format: float
+          minimum: 0
+        stockQuantity:
+          type: integer
+          minimum: 0
+        supplier:
+          type: string
+        weight:
+          type: number
+          format: float
+          minimum: 0
+        dimensions:
+          type: object
+          properties:
+            length:
+              type: number
+              format: float
+              minimum: 0
+            width:
+              type: number
+              format: float
+              minimum: 0
+            height:
+              type: number
+              format: float
+              minimum: 0
+        isActive:
+          type: boolean
+
+    Order:
+      type: object
+      required:
+        - customer
+        - items
+        - totalAmount
+        - status
+      properties:
+        _id:
+          type: string
+          description: Unique identifier for the order
+          example: "507f1f77bcf86cd799439012"
+        orderNumber:
+          type: string
+          description: Auto-generated order number
+          example: "ORD-2024-001"
+        customer:
+          $ref: '#/components/schemas/Customer'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        totalAmount:
+          type: number
+          format: float
+          minimum: 0
+          description: Total order amount
+          example: 259.98
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered, cancelled]
+          default: pending
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        notes:
+          type: string
+          description: Order notes
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderInput:
+      type: object
+      required:
+        - customer
+        - items
+        - shippingAddress
+      properties:
+        customer:
+          $ref: '#/components/schemas/CustomerInput'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+        shippingAddress:
+          $ref: '#/components/schemas/AddressInput'
+        notes:
+          type: string
+          maxLength: 500
+
+    OrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered, cancelled]
+        shippingAddress:
+          $ref: '#/components/schemas/AddressInput'
+        notes:
+          type: string
+          maxLength: 500
+
+    Customer:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          example: "+1234567890"
+
+    CustomerInput:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          example: "+1234567890"
+
+    OrderItem:
+      type: object
+      required:
+        - product
+        - quantity
+        - price
+      properties:
+        product:
+          type: string
+          description: Product ID
+          example: "507f1f77bcf86cd799439011"
+        name:
+          type: string
+          description: Product name at time of order
+          example: "Wireless Bluetooth Headphones"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        price:
+          type: number
+          format: float
+          minimum: 0
+          example: 129.99
+
+    OrderItemInput:
+      type: object
+      required:
+        - product
+        - quantity
+      properties:
+        product:
+          type: string
+          description: Product ID
+          example: "507f1f77bcf86cd799439011"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+
+    Address:
+      type: object
+      required:
+        - street
+        - city
+        - state
+        - zipCode
+        - country
+      properties:
+        street:
+          type: string
+          example: "123 Main St"
+        city:
+          type: string
+          example: "New York"
+        state:
+          type: string
+          example: "NY"
+        zipCode:
+          type: string
+          example: "10001"
+        country:
+          type: string
+          example: "USA"
+
+    AddressInput:
+      type: object
+      required:
+        - street
+        - city
+        - state
+        - zipCode
+        - country
+      properties:
+        street:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: "123 Main St"
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "New York"
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "NY"
+        zipCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: "10001"
+        country:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "USA"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        totalPages:
+          type: integer
+          example: 5
+        totalItems:
+          type: integer
+          example: 48
+        hasNext:
+          type: boolean
+          example: true
+        hasPrev:
+          type: boolean
+          example: false
+
+  responses:
+    BadRequest:
+      description: Bad Request - Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Validation error"
+              errors:
+                type: array
+                items:
+                  type: string
+                example: ["Name is required", "Price must be a positive number"]
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Product not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Internal server error"

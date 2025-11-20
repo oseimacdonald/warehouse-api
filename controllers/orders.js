@@ -1,159 +1,342 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
 
-// Get all orders
+// Get all orders with filtering and pagination
 const getAllOrders = async (req, res) => {
   try {
-    const { status, page = 1, limit = 10 } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Build filter object
+    const filter = {};
     
-    let query = {};
-    if (status) query.status = status;
+    // Status filter
+    if (req.query.status) {
+      const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+      if (validStatuses.includes(req.query.status)) {
+        filter.status = req.query.status;
+      }
+    }
     
-    const orders = await Order.find(query)
-      .populate('items.product', 'name sku price')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+    // Customer email filter
+    if (req.query.customerEmail) {
+      filter['customer.email'] = { $regex: req.query.customerEmail, $options: 'i' };
+    }
+    
+    // Date range filters
+    if (req.query.startDate) {
+      filter.createdAt = { ...filter.createdAt, $gte: new Date(req.query.startDate) };
+    }
+    if (req.query.endDate) {
+      filter.createdAt = { ...filter.createdAt, $lte: new Date(req.query.endDate) };
+    }
+
+    const orders = await Order.find(filter)
+      .populate('items.product', 'name sku price images stockQuantity')
+      .skip(skip)
+      .limit(limit)
       .sort({ createdAt: -1 });
-    
-    const total = await Order.countDocuments(query);
-    
-    res.json({
+
+    const total = await Order.countDocuments(filter);
+
+    res.status(200).json({
       success: true,
+      count: orders.length,
       data: orders,
       pagination: {
-        currentPage: parseInt(page),
+        page,
+        limit,
         totalPages: Math.ceil(total / limit),
-        totalOrders: total,
-        hasNext: page * limit < total,
+        totalItems: total,
+        hasNext: page < Math.ceil(total / limit),
         hasPrev: page > 1
       }
     });
   } catch (error) {
+    console.error('Error fetching orders:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching orders',
-      error: error.message
+      message: 'Server error while fetching orders',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
-// Get single order
+// Get order by ID
 const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
-      .populate('items.product', 'name sku price stockQuantity');
-    
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: order
-    });
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
+    // Validate MongoDB ID format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid order ID format'
       });
     }
-    
+
+    const order = await Order.findById(req.params.id)
+      .populate('items.product', 'name sku price images stockQuantity category');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: `Order not found with id: ${req.params.id}`
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    console.error('Error fetching order:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching order',
-      error: error.message
+      message: 'Server error while fetching order',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
 // Create new order
 const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { items, customer, shippingCost = 0 } = req.body;
+    const { customer, shippingAddress, items, shippingCost = 0, taxAmount = 0, notes } = req.body;
+
+    // Validate required fields
+    const requiredFields = ['customer', 'shippingAddress', 'items'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
     
-    // Validate items and calculate total
-    let totalAmount = 0;
+    if (missingFields.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields',
+        errors: missingFields.map(field => `${field} is required`)
+      });
+    }
+
+    // Validate customer fields
+    const customerRequired = ['name', 'email'];
+    const customerMissing = customerRequired.filter(field => !customer[field]);
+    
+    if (customerMissing.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Missing customer information',
+        errors: customerMissing.map(field => `customer.${field} is required`)
+      });
+    }
+
+    // Validate shipping address fields
+    const addressRequired = ['street', 'city', 'state', 'zipCode', 'country'];
+    const addressMissing = addressRequired.filter(field => !shippingAddress[field]);
+    
+    if (addressMissing.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Missing shipping address information',
+        errors: addressMissing.map(field => `shippingAddress.${field} is required`)
+      });
+    }
+
+    // Validate items
+    if (!Array.isArray(items) || items.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Order must contain at least one item',
+        errors: ['items array cannot be empty']
+      });
+    }
+
+    // Process items and calculate totals
+    let subtotal = 0;
     const orderItems = [];
-    
+    const stockUpdates = [];
+
     for (const item of items) {
-      const product = await Product.findById(item.product);
+      // Validate item structure
+      if (!item.product || !item.quantity) {
+        await session.abortTransaction();
+        session.endSession();
+        
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid item format',
+          errors: ['Each item must have product and quantity']
+        });
+      }
+
+      // Validate MongoDB ID
+      if (!mongoose.Types.ObjectId.isValid(item.product)) {
+        await session.abortTransaction();
+        session.endSession();
+        
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product ID format',
+          errors: [`Invalid product ID: ${item.product}`]
+        });
+      }
+
+      // Check product existence and availability
+      const product = await Product.findById(item.product).session(session);
       
       if (!product) {
+        await session.abortTransaction();
+        session.endSession();
+        
         return res.status(400).json({
           success: false,
-          message: `Product with ID ${item.product} not found`
+          message: 'Product not found',
+          errors: [`Product with ID ${item.product} not found`]
         });
       }
-      
+
       if (!product.isActive) {
+        await session.abortTransaction();
+        session.endSession();
+        
         return res.status(400).json({
           success: false,
-          message: `Product ${product.name} is not active`
+          message: 'Product not available',
+          errors: [`Product "${product.name}" is not active`]
         });
       }
-      
+
       if (product.stockQuantity < item.quantity) {
+        await session.abortTransaction();
+        session.endSession();
+        
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}`
+          message: 'Insufficient stock',
+          errors: [
+            `Insufficient stock for "${product.name}". Available: ${product.stockQuantity}, Requested: ${item.quantity}`
+          ]
         });
       }
-      
+
+      if (item.quantity < 1) {
+        await session.abortTransaction();
+        session.endSession();
+        
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid quantity',
+          errors: [`Quantity for "${product.name}" must be at least 1`]
+        });
+      }
+
       const itemTotal = product.price * item.quantity;
-      totalAmount += itemTotal;
-      
+      subtotal += itemTotal;
+
       orderItems.push({
         product: item.product,
         quantity: item.quantity,
         price: product.price
       });
+
+      // Prepare stock update
+      stockUpdates.push({
+        productId: item.product,
+        quantity: -item.quantity
+      });
     }
-    
-    totalAmount += shippingCost;
-    
+
+    // Validate numeric fields
+    if (shippingCost < 0 || taxAmount < 0) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount',
+        errors: ['Shipping cost and tax amount cannot be negative']
+      });
+    }
+
+    const totalAmount = subtotal + shippingCost + taxAmount;
+
+    // Create order
     const order = new Order({
-      items: orderItems,
       customer,
+      shippingAddress,
+      items: orderItems,
       shippingCost,
-      totalAmount
+      taxAmount,
+      subtotal,
+      totalAmount,
+      notes,
+      status: 'pending'
     });
-    
-    const savedOrder = await order.save();
-    
+
+    const savedOrder = await order.save({ session });
+
     // Update product stock quantities
-    for (const item of items) {
+    for (const update of stockUpdates) {
       await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stockQuantity: -item.quantity } }
+        update.productId,
+        { $inc: { stockQuantity: update.quantity } },
+        { session }
       );
     }
-    
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Populate and return the created order
     const populatedOrder = await Order.findById(savedOrder._id)
-      .populate('items.product', 'name sku price');
-    
+      .populate('items.product', 'name sku price images category');
+
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
       data: populatedOrder
     });
+
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    
+    console.error('Error creating order:', error);
+    
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: errors
+        message: 'Validation failed',
+        errors
       });
     }
-    
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate order number',
+        errors: ['Order number already exists']
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error creating order',
-      error: error.message
+      message: 'Server error while creating order',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -161,87 +344,159 @@ const createOrder = async (req, res) => {
 // Update order status
 const updateOrderStatus = async (req, res) => {
   try {
-    const { status } = req.body;
-    
-    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
-      });
-    }
-    
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    ).populate('items.product', 'name sku price');
-    
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Order status updated successfully',
-      data: order
-    });
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
+    // Validate MongoDB ID format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid order ID format'
       });
     }
+
+    const { status, notes } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required',
+        errors: ['status field is required']
+      });
+    }
+
+    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status',
+        errors: [`Status must be one of: ${validStatuses.join(', ')}`]
+      });
+    }
+
+    const updateData = { status };
+    if (notes !== undefined) {
+      updateData.notes = notes;
+    }
+
+    // Add estimated delivery for shipped orders
+    if (status === 'shipped') {
+      const deliveryDate = new Date();
+      deliveryDate.setDate(deliveryDate.getDate() + 7); // 7 days from now
+      updateData.estimatedDelivery = deliveryDate;
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('items.product', 'name sku price');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: `Order not found with id: ${req.params.id}`
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Order status updated to ${status}`,
+      data: order
+    });
+  } catch (error) {
+    console.error('Error updating order:', error);
     
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error updating order',
-      error: error.message
+      message: 'Server error while updating order',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
 // Delete order
 const deleteOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const order = await Order.findByIdAndDelete(req.params.id);
-    
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-    
-    // Restore product stock quantities
-    for (const item of order.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stockQuantity: item.quantity } }
-      );
-    }
-    
-    res.json({
-      success: true,
-      message: 'Order deleted successfully and stock restored',
-      data: order
-    });
-  } catch (error) {
-    if (error.kind === 'ObjectId') {
+    // Validate MongoDB ID format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      await session.abortTransaction();
+      session.endSession();
+      
       return res.status(400).json({
         success: false,
         message: 'Invalid order ID format'
       });
     }
+
+    const order = await Order.findById(req.params.id).session(session);
+
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(404).json({
+        success: false,
+        message: `Order not found with id: ${req.params.id}`
+      });
+    }
+
+    // Only allow deletion of pending or cancelled orders
+    if (!['pending', 'cancelled'].includes(order.status)) {
+      await session.abortTransaction();
+      session.endSession();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete order',
+        errors: [`Only pending or cancelled orders can be deleted. Current status: ${order.status}`]
+      });
+    }
+
+    // Restore product stock quantities
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(
+        item.product,
+        { $inc: { stockQuantity: item.quantity } },
+        { session }
+      );
+    }
+
+    // Delete the order
+    await Order.findByIdAndDelete(req.params.id).session(session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      success: true,
+      message: 'Order deleted successfully and stock restored',
+      data: {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        customer: order.customer.name,
+        totalAmount: order.totalAmount,
+        itemsRestored: order.items.length
+      }
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     
+    console.error('Error deleting order:', error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting order',
-      error: error.message
+      message: 'Server error while deleting order',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

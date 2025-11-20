@@ -14,15 +14,18 @@ const productSchema = new mongoose.Schema({
   },
   sku: {
     type: String,
-    // REMOVED: required: true - because it will be auto-generated
     unique: true,
     uppercase: true,
+    sparse: true, // Allow null/undefined for unique constraint
     match: [/^[A-Z0-9-]+$/, 'SKU can only contain letters, numbers, and hyphens']
   },
   category: {
     type: String,
     required: [true, 'Category is required'],
-    enum: ['Electronics', 'Clothing', 'Home & Garden', 'Sports', 'Beauty', 'Toys', 'Other']
+    enum: {
+      values: ['Electronics', 'Clothing', 'Home & Garden', 'Sports', 'Beauty', 'Toys', 'Other'],
+      message: '{VALUE} is not a valid category'
+    }
   },
   price: {
     type: Number,
@@ -33,7 +36,8 @@ const productSchema = new mongoose.Schema({
   cost: {
     type: Number,
     required: [true, 'Cost is required'],
-    min: [0, 'Cost cannot be negative']
+    min: [0, 'Cost cannot be negative'],
+    max: [100000, 'Cost cannot exceed 100,000']
   },
   stockQuantity: {
     type: Number,
@@ -44,22 +48,42 @@ const productSchema = new mongoose.Schema({
   supplier: {
     type: String,
     required: [true, 'Supplier is required'],
-    trim: true
+    trim: true,
+    maxlength: [100, 'Supplier name cannot exceed 100 characters']
   },
   weight: {
     type: Number,
-    min: [0, 'Weight cannot be negative']
+    min: [0, 'Weight cannot be negative'],
+    max: [1000, 'Weight cannot exceed 1000 kg']
   },
   dimensions: {
-    length: Number,
-    width: Number,
-    height: Number
+    length: {
+      type: Number,
+      min: [0, 'Length cannot be negative']
+    },
+    width: {
+      type: Number,
+      min: [0, 'Width cannot be negative']
+    },
+    height: {
+      type: Number,
+      min: [0, 'Height cannot be negative']
+    }
   },
   isActive: {
     type: Boolean,
     default: true
   },
-  images: [String]
+  images: [{
+    type: String,
+    validate: {
+      validator: function(url) {
+        // Basic URL validation
+        return url && url.length > 0;
+      },
+      message: 'Image URL cannot be empty'
+    }
+  }]
 }, {
   timestamps: true
 });
@@ -68,7 +92,6 @@ const productSchema = new mongoose.Schema({
 productSchema.pre('save', async function(next) {
   if (this.isNew && (!this.sku || this.sku === 'TEMP-SKU')) {
     try {
-      // Define category prefixes based on your existing data
       const categoryPrefixes = {
         'Electronics': 'ELE',
         'Clothing': 'CLO', 
@@ -88,7 +111,7 @@ productSchema.pre('save', async function(next) {
           sku: { $regex: `^${prefix}-\\d+$` }
         },
         {},
-        { sort: { sku: -1 } }
+        { sort: { createdAt: -1 } }
       );
       
       let sequence = 1;
@@ -99,8 +122,9 @@ productSchema.pre('save', async function(next) {
         }
       }
       
-      this.sku = `${prefix}-${sequence.toString().padStart(3, '0')}`;
+      this.sku = `${prefix}-${sequence.toString().padStart(4, '0')}`;
     } catch (error) {
+      console.error('Error generating SKU:', error);
       // Fallback: use timestamp
       const timestamp = Date.now().toString().slice(-6);
       this.sku = `${categoryPrefixes[this.category] || 'OTH'}-${timestamp}`;
@@ -109,18 +133,27 @@ productSchema.pre('save', async function(next) {
   next();
 });
 
-// Add pre-validate hook to ensure SKU exists before validation
-productSchema.pre('validate', function(next) {
-  if (this.isNew && !this.sku) {
-    // Set a temporary SKU for validation
-    // The real one will be set in pre('save')
-    this.sku = 'TEMP-SKU';
+// Virtual for profit margin
+productSchema.virtual('profitMargin').get(function() {
+  if (this.price && this.cost) {
+    return ((this.price - this.cost) / this.cost * 100).toFixed(2);
   }
-  next();
+  return 0;
 });
 
-// Remove duplicate index definitions - keep only schema indexes
-productSchema.index({ category: 1 });
-productSchema.index({ isActive: 1 });
+// Indexes for better query performance
+productSchema.index({ category: 1, isActive: 1 });
+productSchema.index({ sku: 1 });
+productSchema.index({ price: 1 });
+productSchema.index({ stockQuantity: 1 });
+
+// Transform output to include virtuals and remove version key
+productSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    delete ret.__v;
+    return ret;
+  }
+});
 
 module.exports = mongoose.model('Product', productSchema);
