@@ -7,6 +7,7 @@ const {
   updateOrderStatus,
   deleteOrder
 } = require('../controllers/orders');
+const { protect, admin } = require('../middleware/auth'); // ADD THIS LINE
 
 /**
  * @swagger
@@ -17,10 +18,23 @@ const {
 
 /**
  * @swagger
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+// PROTECTED ROUTES - Require authentication
+/**
+ * @swagger
  * /api/orders:
  *   get:
- *     summary: Get all orders with filtering and pagination
+ *     summary: Get all orders with filtering and pagination (Admin only)
  *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -92,17 +106,23 @@ const {
  *                       type: boolean
  *                     hasPrev:
  *                       type: boolean
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.get('/', getAllOrders);
+router.get('/', protect, admin, getAllOrders); // ADD protect, admin middleware
 
 /**
  * @swagger
  * /api/orders/{id}:
  *   get:
- *     summary: Get a specific order by ID
+ *     summary: Get a specific order by ID (Admin only)
  *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -125,18 +145,23 @@ router.get('/', getAllOrders);
  *                   $ref: '#/components/schemas/Order'
  *       400:
  *         description: Invalid order ID
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.get('/:id', getOrderById);
+router.get('/:id', protect, admin, getOrderById); // ADD protect, admin middleware
 
+// PUBLIC ROUTE - Allow order creation without authentication (for customers)
 /**
  * @swagger
  * /api/orders:
  *   post:
- *     summary: Create a new order
+ *     summary: Create a new order (Public - for customers)
  *     tags: [Orders]
  *     requestBody:
  *       required: true
@@ -259,14 +284,17 @@ router.get('/:id', getOrderById);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.post('/', createOrder);
+router.post('/', createOrder); // KEPT PUBLIC for customer orders
 
+// PROTECTED ROUTES - Require authentication
 /**
  * @swagger
  * /api/orders/{id}:
  *   put:
- *     summary: Update order status
+ *     summary: Update order status (Admin only)
  *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -308,19 +336,25 @@ router.post('/', createOrder);
  *                   $ref: '#/components/schemas/Order'
  *       400:
  *         description: Validation error
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.put('/:id', updateOrderStatus);
+router.put('/:id', protect, admin, updateOrderStatus); // ADD protect, admin middleware
 
 /**
  * @swagger
  * /api/orders/{id}:
  *   delete:
- *     summary: Delete an order
+ *     summary: Delete an order (Admin only)
  *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -366,11 +400,15 @@ router.put('/:id', updateOrderStatus);
  *                   success: false
  *                   message: "Cannot delete order"
  *                   errors: ["Only pending or cancelled orders can be deleted. Current status: shipped"]
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.delete('/:id', deleteOrder);
+router.delete('/:id', protect, admin, deleteOrder); // ADD protect, admin middleware
 
 module.exports = router;

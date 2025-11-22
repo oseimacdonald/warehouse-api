@@ -7,6 +7,7 @@ const {
   updateProduct,
   deleteProduct
 } = require('../controllers/products');
+const { protect, admin } = require('../middleware/auth'); // ADD THIS LINE
 
 /**
  * @swagger
@@ -15,6 +16,17 @@ const {
  *   description: Product management endpoints
  */
 
+/**
+ * @swagger
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+// PUBLIC ROUTES - No authentication required
 /**
  * @swagger
  * /api/products:
@@ -141,12 +153,15 @@ router.get('/', getAllProducts);
  */
 router.get('/:id', getProductById);
 
+// PROTECTED ROUTES - Require authentication
 /**
  * @swagger
  * /api/products:
  *   post:
- *     summary: Create a new product
+ *     summary: Create a new product (Admin only)
  *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -262,17 +277,23 @@ router.get('/:id', getProductById);
  *                   success: false
  *                   message: "Validation error"
  *                   errors: ["price must be a positive number"]
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.post('/', createProduct);
+router.post('/', protect, admin, createProduct); // ADD protect, admin middleware
 
 /**
  * @swagger
  * /api/products/{id}:
  *   put:
- *     summary: Update a product
+ *     summary: Update a product (Admin only)
  *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -355,19 +376,25 @@ router.post('/', createProduct);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.put('/:id', updateProduct);
+router.put('/:id', protect, admin, updateProduct); // ADD protect, admin middleware
 
 /**
  * @swagger
  * /api/products/{id}:
  *   delete:
- *     summary: Delete a product
+ *     summary: Delete a product (Admin only)
  *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -399,11 +426,15 @@ router.put('/:id', updateProduct);
  *                       type: string
  *       400:
  *         description: Invalid product ID
+ *       401:
+ *         description: Not authorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin access required
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.delete('/:id', deleteProduct);
+router.delete('/:id', protect, admin, deleteProduct); // ADD protect, admin middleware
 
 module.exports = router;

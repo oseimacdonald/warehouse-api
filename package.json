@@ -6,22 +6,35 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "list-users": "node scripts/userManager.js --list",
+    "backup": "node scripts/backupData.js --backup",
+    "test-auth": "node scripts/testAuth.js",
+    "migrate-data": "node scripts/migrateData.js --run-all",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "api",
     "warehouse",
     "dropshipping",
-    "mongodb"
+    "mongodb",
+    "oauth",
+    "authentication"
   ],
   "author": "Mac-Donald",
   "license": "BYUI",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-session": "^1.17.3",
     "helmet": "^7.0.0",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.5.0",
+    "passport": "^0.6.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-jwt": "^4.0.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },

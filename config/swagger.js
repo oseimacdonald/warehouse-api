@@ -7,7 +7,7 @@ const options = {
     info: {
       title: 'Warehouse Management API',
       version: '1.0.0',
-      description: 'A comprehensive API for managing warehouse products and orders for dropshipping business',
+      description: 'A comprehensive API for managing warehouse products and orders for dropshipping business with OAuth authentication',
       contact: {
         name: 'API Support',
         email: 'support@warehouse.com',
@@ -28,7 +28,143 @@ const options = {
       },
     ],
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter JWT token in the format: Bearer <token>'
+        }
+      },
       schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            _id: {
+              type: 'string',
+              description: 'Auto-generated user ID',
+              example: '507f1f77bcf86cd799439013'
+            },
+            googleId: {
+              type: 'string',
+              description: 'Google OAuth ID',
+              example: '123456789012345678901'
+            },
+            displayName: {
+              type: 'string',
+              description: 'User display name',
+              example: 'John Doe'
+            },
+            firstName: {
+              type: 'string',
+              description: 'User first name',
+              example: 'John'
+            },
+            lastName: {
+              type: 'string',
+              description: 'User last name',
+              example: 'Doe'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email address',
+              example: 'john.doe@example.com'
+            },
+            image: {
+              type: 'string',
+              description: 'User profile image URL',
+              example: 'https://lh3.googleusercontent.com/a/AAcHTte...'
+            },
+            role: {
+              type: 'string',
+              enum: ['user', 'admin'],
+              default: 'user',
+              description: 'User role'
+            },
+            isActive: {
+              type: 'boolean',
+              default: true,
+              description: 'Whether the user account is active'
+            },
+            lastLogin: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Last login timestamp'
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time'
+            }
+          }
+        },
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: true
+            },
+            message: {
+              type: 'string',
+              example: 'Login successful'
+            },
+            token: {
+              type: 'string',
+              description: 'JWT token for authenticated requests',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+            },
+            user: {
+              $ref: '#/components/schemas/User'
+            }
+          }
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john.doe@example.com'
+            },
+            password: {
+              type: 'string',
+              format: 'password',
+              minLength: 6,
+              example: 'password123'
+            }
+          }
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['firstName', 'lastName', 'email', 'password'],
+          properties: {
+            firstName: {
+              type: 'string',
+              example: 'John'
+            },
+            lastName: {
+              type: 'string',
+              example: 'Doe'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john.doe@example.com'
+            },
+            password: {
+              type: 'string',
+              format: 'password',
+              minLength: 6,
+              example: 'password123'
+            }
+          }
+        },
         Product: {
           type: 'object',
           required: ['name', 'price', 'category', 'stockQuantity'],
@@ -224,6 +360,34 @@ const options = {
         }
       },
       responses: {
+        Unauthorized: {
+          description: 'Authentication required',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/Error'
+              },
+              example: {
+                success: false,
+                message: 'Not authorized, no token'
+              }
+            }
+          }
+        },
+        Forbidden: {
+          description: 'Insufficient permissions',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/Error'
+              },
+              example: {
+                success: false,
+                message: 'Access denied. Admin privileges required.'
+              }
+            }
+          }
+        },
         NotFound: {
           description: 'Resource not found',
           content: {
@@ -268,7 +432,12 @@ const options = {
           }
         }
       }
-    }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
   },
   apis: ['./routes/*.js'], // Path to the API docs
 };
